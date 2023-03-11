@@ -228,7 +228,7 @@ class MyNIMBLELayer(torch.nn.Module):
         Then performs skinning.
         """
         if self.use_pose_pca:
-            full_pose = self.generate_full_pose(hand_params['pose_params'], normalized=True, with_root=False).view(-1, 20, 3)
+            full_pose = self.generate_full_pose(hand_params['pose_params'], normalized=True, with_root=True).view(-1, 20, 3)
         else:
             full_pose = hand_params['pose_params'].view(-1, 20, 3) # b, 20, 3
 
