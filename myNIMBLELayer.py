@@ -10,6 +10,8 @@ import trimesh
 from utils.NIMBLE_model.utils import batch_to_tensor_device, smooth_mesh
 from utils.NIMBLE_model.utils import *
 from pytorch3d.structures.meshes import Meshes
+from torch.autograd import Variable
+import pickle
 
 class MyNIMBLELayer(torch.nn.Module):
     __constants__ = [
@@ -50,7 +52,7 @@ class MyNIMBLELayer(torch.nn.Module):
         self.register_buffer("th_faces", pm_dict['face'].squeeze())
         self.register_buffer("sw", pm_dict['all_sw'].squeeze())
         self.register_buffer("pbs", pm_dict['all_pbs'].squeeze())
-        self.register_buffer("jreg_mano", pm_dict['jreg_mano'].squeeze())
+        self.register_buffer("jreg_mano", pm_dict['jreg_mano'].squeeze()) # [21, 5990]
         self.register_buffer("jreg_bone", pm_dict['jreg_bone'].squeeze())
         self.register_buffer("shape_basis", pm_dict['shape_basis'].squeeze())
         self.register_buffer("shape_pm_std", pm_dict['shape_pm_std'].squeeze())
@@ -191,6 +193,35 @@ class MyNIMBLELayer(torch.nn.Module):
         x = torch.clamp(x, min=0, max=1)
         return x
 
+    def jnts_map_nimble2frei(self, mano_verts):#[b,778,3]
+
+        batch_size = mano_verts.shape[0]
+        MANO_file = 'data/MANO_RIGHT.pkl'
+        dd = pickle.load(open(MANO_file, 'rb'),encoding='latin1')
+        J_regressor = Variable(torch.from_numpy(np.expand_dims(dd['J_regressor'].todense(), 0).astype(np.float32)).to(device=mano_verts.device))
+        # J_reg: [1, 16, 778]
+        # [b, 3, 778] x [b, 778, 16] -> [b, 3, 16]
+        Jtr = torch.matmul(mano_verts.permute(0,2,1), J_regressor.repeat(batch_size,1,1).permute(0,2,1))
+        Jtr = Jtr.permute(0, 2, 1) # b, 16, 3
+
+        # v is of shape: b, 3 (or more) dims, 778 samples
+        # For FreiHand: add 5 joints.
+        # Jtr.insert(4,mano_verts[:,:3,320].unsqueeze(2))
+        # Jtr.insert(8,mano_verts[:,:3,443].unsqueeze(2))
+        # Jtr.insert(12,mano_verts[:,:3,672].unsqueeze(2))
+        # Jtr.insert(16,mano_verts[:,:3,555].unsqueeze(2))
+        # Jtr.insert(20,mano_verts[:,:3,744].unsqueeze(2))      
+        Jtr = torch.cat([Jtr[:,:4], mano_verts[:,320].unsqueeze(1), Jtr[:,4:]], 1)
+        Jtr = torch.cat([Jtr[:,:8], mano_verts[:,443].unsqueeze(1), Jtr[:,8:]], 1)
+        Jtr = torch.cat([Jtr[:,:12], mano_verts[:,672].unsqueeze(1), Jtr[:,12:]], 1)
+        Jtr = torch.cat([Jtr[:,:16], mano_verts[:,555].unsqueeze(1), Jtr[:,16:]], 1)
+        Jtr = torch.cat([Jtr[:,:20], mano_verts[:,744].unsqueeze(1), Jtr[:,20:]], 1)
+        
+        # Jtr = torch.cat(Jtr, 2).permute(0,2,1)
+
+
+        return Jtr
+
     def forward(self, hand_params, handle_collision=True, scale_gt=None):
         """
         Takes points in R^3 and first applies relevant pose and shape blend shapes.
@@ -203,10 +234,13 @@ class MyNIMBLELayer(torch.nn.Module):
 
         th_v_shaped, jreg_joints = self.generate_hand_shape(hand_params['shape_params'],normalized=True)
 
-        if scale_gt is not None:
-            mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, hand_params['trans'], jreg_joints, self.sw, self.pbs, scale_gt)
-        else: # pass estimated scale
-            mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, hand_params['trans'], jreg_joints, self.sw, self.pbs, hand_params['scale'])
+        # if scale_gt is not None:
+        #     mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, hand_params['trans'], jreg_joints, self.sw, self.pbs, scale_gt)
+        # else: # pass estimated scale
+            # mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, hand_params['trans'], jreg_joints, self.sw, self.pbs, hand_params['scale'])
+        # ** no global scale and trans
+        root_trans = torch.zeros(jreg_joints.shape[0], 3).to(jreg_joints.device)
+        mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, root_trans, jreg_joints, self.sw, self.pbs, None)
         
         skin_v = mesh_v[:, self.skin_v_sep:, :]
 
@@ -225,12 +259,14 @@ class MyNIMBLELayer(torch.nn.Module):
         # skin_p3dmesh = smooth_mesh(skin_p3dmesh)
 
         skin_mano_v = self.nimble_to_mano(skin_v, is_surface=True)
+        joints = self.jnts_map_nimble2frei(skin_mano_v)
 
         # muscle_v = mesh_v[:,self.bone_v_sep:self.skin_v_sep,:]
         # bone_v = mesh_v[:,:self.bone_v_sep,:]
 
         return {
-            'joints': bone_joints, # 25 joints
+            'nimble_joints': bone_joints, # 25 joints
+            'joints': joints, # Freihand joints, 21
             'verts': skin_v, # 5990 verts
             'faces': faces, # very big number
             'rot': rot, # b, 3
@@ -248,7 +284,7 @@ class MyNIMBLELayer(torch.nn.Module):
         th_pose_map, th_rot_map = th_posemap_axisang_2output(pose.view(batch_size, -1))
         th_full_pose = pose.view(batch_size, -1, 3) # b, 20, 3
         rot = th_full_pose[:, 0] # b, 3
-        root_rot = batch_rodrigues(rot).view(batch_size, 3, 3)
+        root_rot = batch_rodrigues(rot).view(batch_size, 3, 3) # [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
 
         th_j = joints
 
@@ -263,8 +299,8 @@ class MyNIMBLELayer(torch.nn.Module):
             points_pose_bs = points
 
         th_results = []
-        root_j = th_j[:, 0, :].contiguous().view(batch_size, 3, 1) # b, 1, 3 -> b, 3, 1
-        th_results.append(th_with_zeros(torch.cat([root_rot, root_j], 2)))
+        root_j = th_j[:, 0, :].contiguous().view(batch_size, 3, 1) # b, 1, 3 -> b, 3 dims, 1
+        th_results.append(th_with_zeros(torch.cat([root_rot, root_j], 2))) # b, 3, 3+1 -> b, 4, 4
 
         # Rotate each part
         for i in range(STATIC_JOINT_NUM - 1):
@@ -273,47 +309,64 @@ class MyNIMBLELayer(torch.nn.Module):
                 i_val_bone = JOINT_ID_BONE_DICT[i_val_joint]
                 joint_rot = th_rot_map[:, (i_val_bone - 1) * 9:i_val_bone * 9].contiguous().view(batch_size, 3, 3)
             else:
-                joint_rot = self.identity_rot.repeat(batch_size, 1, 1)
+                joint_rot = self.identity_rot.repeat(batch_size, 1, 1) # [1, 1, 1] -> [b, 3, 3]
 
             joint_j = th_j[:, i_val_joint, :].contiguous().view(batch_size, 3, 1)
             parent = self.kintree_parents[i_val_joint]
             parent_j = th_j[:, parent, :].contiguous().view(batch_size, 3, 1)
             joint_rel_transform = th_with_zeros(torch.cat([joint_rot, joint_j - parent_j], 2))
 
-            th_results.append(torch.matmul(th_results[parent], joint_rel_transform))
+            th_results.append(torch.matmul(th_results[parent], joint_rel_transform)) # [b, 4, 4]
 
-        th_results_global = th_results
+        th_results_global = th_results # 25 * [b, 4, 4]
         th_results2 = torch.zeros((batch_size, 4, 4, STATIC_JOINT_NUM),
                                   dtype=root_j.dtype,
-                                  device=root_j.device)
+                                  device=root_j.device) # [b, 4, 4, 25]
 
         for i in range(STATIC_JOINT_NUM):
             padd_zero = torch.zeros(1, dtype=th_j.dtype, device=th_j.device)
             joint_j = torch.cat(
-                [th_j[:, i],
-                 padd_zero.view(1, 1).repeat(batch_size, 1)], 1)
-            tmp = torch.bmm(th_results[i], joint_j.unsqueeze(2))
+                [th_j[:, i], # [b, 3]
+                 padd_zero.view(1, 1).repeat(batch_size, 1)], 1) # cat: [b, 1] -> [b, 4]
+            tmp = torch.bmm(th_results[i], joint_j.unsqueeze(2)) # b, 4, 4 x b, 4, 1 => b, 4, 1
             th_results2[:, :, :, i] = th_results[i] - th_pack(tmp)
         
 
         skinning_weight = skinning_weight.reshape(1, -1, STATIC_JOINT_NUM)
         th_verts = self.compute_warp(batch_size, points_pose_bs, skinning_weight, th_results2)
 
-        th_jtr = torch.stack(th_results_global, dim=1)[:, :, :3, 3]
+        # joints with pose
+        th_jtr = torch.stack(th_results_global, dim=1)[:, :, :3, 3] # b, 25, 4, 4 -> b, 25, 3
+        
+        # https://github.com/reyuwei/NIMBLE_model/issues/5, 
+        # NIMBLE model is in millimeter unit. Scale by 0.001 to get MANO scale (in meter unit).
+        global_scale_meter = 0.001 * torch.ones(batch_size, 1).to(th_j.device)
+        center_joint = th_jtr[:, ROOT_JOINT_IDX].unsqueeze(1) # [b, 1, 3]
+        th_jtr = th_jtr - center_joint
+        th_verts = th_verts - center_joint # [b, 14970, 3]
+
+        verts_scale = global_scale_meter.expand(th_verts.shape[0], th_verts.shape[1])
+        verts_scale = verts_scale.unsqueeze(2).repeat(1, 1, 3)
+        th_verts = th_verts * verts_scale
+        th_verts = th_verts + center_joint
+
+        j_scale = global_scale_meter.expand(th_jtr.shape[0], th_jtr.shape[1])
+        j_scale = j_scale.unsqueeze(2).repeat(1, 1, 3)
+        th_jtr = th_jtr * j_scale
+        th_jtr = th_jtr + center_joint # x+(y-x)*s
 
         # global scaling
         if global_scale is not None:
-            global_scale_meter = global_scale * 0.001 # https://github.com/reyuwei/NIMBLE_model/issues/5, NIMBLE model is in millimeter unit. Scale by 0.001 to get MANO scale (in meter unit).
             center_joint = th_jtr[:, ROOT_JOINT_IDX].unsqueeze(1)
             th_jtr = th_jtr - center_joint
             th_verts = th_verts - center_joint
 
-            verts_scale = global_scale_meter.expand(th_verts.shape[0], th_verts.shape[1])
+            verts_scale = global_scale.expand(th_verts.shape[0], th_verts.shape[1])
             verts_scale = verts_scale.unsqueeze(2).repeat(1, 1, 3)
             th_verts = th_verts * verts_scale
             th_verts = th_verts + center_joint
 
-            j_scale = global_scale_meter.expand(th_jtr.shape[0], th_jtr.shape[1])
+            j_scale = global_scale.expand(th_jtr.shape[0], th_jtr.shape[1])
             j_scale = j_scale.unsqueeze(2).repeat(1, 1, 3)
             th_jtr = th_jtr * j_scale
             th_jtr = th_jtr + center_joint
@@ -324,7 +377,7 @@ class MyNIMBLELayer(torch.nn.Module):
             center_joint = th_jtr[:, ROOT_JOINT_IDX].unsqueeze(1)
             offset = root_position - center_joint
         
-            th_jtr = th_jtr + offset
+            th_jtr = th_jtr + offset # origin-root + x
             th_verts = th_verts + offset
 
         return th_verts, th_jtr, rot

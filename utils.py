@@ -245,13 +245,13 @@ def subtract_flat_id(rot_mats):
     results = rot_mats - id_flat
     return results
 
-def th_with_zeros(tensor):
+def th_with_zeros(tensor): # [b, 3, 4]
     batch_size = tensor.shape[0]
     padding = tensor.new([0.0, 0.0, 0.0, 1.0])
     padding.requires_grad = False
 
-    concat_list = [tensor, padding.view(1, 1, 4).repeat(batch_size, 1, 1)]
-    cat_res = torch.cat(concat_list, 1)
+    concat_list = [tensor, padding.view(1, 1, 4).repeat(batch_size, 1, 1)] # [b, 1, 4]
+    cat_res = torch.cat(concat_list, 1) # [b, 4, 4]
     return cat_res
 
 def th_scalemat_scale(th_scale_bone):
