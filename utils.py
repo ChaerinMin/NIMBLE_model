@@ -332,7 +332,7 @@ def vertices2landmarks(
 def save_textured_nimble(fname, skin_v, tex_img):
     ### batch_size = 1
     import cv2
-    textured_pkl = "assets/NIMBLE_TEX_FUV.pkl"
+    textured_pkl = "utils/NIMBLE_model/assets/NIMBLE_TEX_FUV.pkl"
 
     fname = Path(fname)
 

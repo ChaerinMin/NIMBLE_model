@@ -54,9 +54,14 @@ if __name__ == "__main__":
     output_folder = "output"
     os.makedirs(output_folder, exist_ok=True)
     for i in range(bn):
-        np.savetxt("{:s}\\rand_{:d}_joints.xyz".format(output_folder,i), bone_joints[i])
-        np.savetxt("{:s}\\rand_{:d}_manov.xyz".format(output_folder,i), skin_mano_v[i])
+        # joints
+        np.savetxt("{:s}/rand_{:d}_joints.xyz".format(output_folder,i), bone_joints[i])
+        # skin_mano_v: 778, 3 skin vertices
+        np.savetxt("{:s}/rand_{:d}_manov.xyz".format(output_folder,i), skin_mano_v[i])
 
-        pytorch3d.io.IO().save_mesh(bone_p3dmesh[i], "{:s}\\rand_{:d}_bone.obj".format(output_folder, i))
-        pytorch3d.io.IO().save_mesh(muscle_p3dmesh[i], "{:s}\\rand_{:d}_muscle.obj".format(output_folder,i))
-        save_textured_nimble("{:s}\\rand_{:d}.obj".format(output_folder, i), skin_v_smooth[i], tex_img[i])
+        # bone mesh
+        pytorch3d.io.IO().save_mesh(bone_p3dmesh[i], "{:s}/rand_{:d}_bone.obj".format(output_folder, i))
+        # muscle mesh
+        pytorch3d.io.IO().save_mesh(muscle_p3dmesh[i], "{:s}/rand_{:d}_muscle.obj".format(output_folder,i))
+        # skin skin_v_smooth: v, f, vt
+        save_textured_nimble("{:s}/rand_{:d}.obj".format(output_folder, i), skin_v_smooth[i], tex_img[i])
