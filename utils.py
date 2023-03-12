@@ -337,26 +337,26 @@ def save_textured_nimble(fname, skin_v, tex_img):
     fname = Path(fname)
 
     obj_name_skin = fname.parent / (fname.stem + "_skin.obj")
-    mtl_name = obj_name_skin.with_suffix(".mtl")
+    # mtl_name = obj_name_skin.with_suffix(".mtl")
     
-    # texture image
-    tex_name_diffuse = fname.parent / (fname.stem + "_diffuse.png")
-    tex_img = np.uint8(tex_img * 255)
+    ## texture image
+    # tex_name_diffuse = fname.parent / (fname.stem + "_diffuse.png")
+    # tex_img = np.uint8(tex_img * 255)
     
-    cv2.imwrite(str(tex_name_diffuse), tex_img[:,:, :3])
-    cv2.imwrite(str(fname.parent / (fname.stem + "_normal.png")), tex_img[:,:,3:6])
-    cv2.imwrite(str(fname.parent / (fname.stem + "_spec.png")), tex_img[:,:,6:])
+    # cv2.imwrite(str(tex_name_diffuse), tex_img[:,:, :3])
+    # cv2.imwrite(str(fname.parent / (fname.stem + "_normal.png")), tex_img[:,:,3:6])
+    # cv2.imwrite(str(fname.parent / (fname.stem + "_spec.png")), tex_img[:,:,6:])
 
-    # mtl
-    mtl_str = "newmtl material_0\nKa 0.200000 0.200000 0.200000\nKd 0.800000 0.800000 0.800000\nKs 1.000000 1.000000 1.000000\nTr 1.000000\nillum 2\nNs 0.000000\nmap_Kd "
-    mtl_str = mtl_str + tex_name_diffuse.name
-    with open(mtl_name, "w") as f:
-        f.writelines(mtl_str)
+    ## mtl
+    # mtl_str = "newmtl material_0\nKa 0.200000 0.200000 0.200000\nKd 0.800000 0.800000 0.800000\nKs 1.000000 1.000000 1.000000\nTr 1.000000\nillum 2\nNs 0.000000\nmap_Kd "
+    # mtl_str = mtl_str + tex_name_diffuse.name
+    # with open(mtl_name, "w") as f:
+    #    f.writelines(mtl_str)
 
     # obj
     f_uv = np.load(textured_pkl, allow_pickle=True)
     with open(obj_name_skin, "w") as f:
-        f.write("mtllib {:s}\n".format(mtl_name.name))    
+        # f.write("mtllib {:s}\n".format(mtl_name.name))    
         for v in skin_v:
             f.writelines("v {:.5f} {:.5f} {:.5f}\n".format(v[0], v[1], v[2]))
         f.writelines(f_uv)
