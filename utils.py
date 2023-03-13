@@ -9,6 +9,7 @@ import numpy as np
 from pathlib import Path
 from pytorch3d.structures.meshes import Meshes
 import pytorch3d.ops
+from rich import print
 
 ROOT_JOINT_IDX = 0  # wrist
 DOF2_BONES = [1, 2, 4, 5, 8, 9, 12, 13, 16, 17]
@@ -329,7 +330,7 @@ def vertices2landmarks(
 
 
 
-def save_textured_nimble(fname, skin_v, tex_img):
+def save_textured_nimble(fname, skin_v, tex_img, console=None):
     ### batch_size = 1
     import cv2
     textured_pkl = "utils/NIMBLE_model/assets/NIMBLE_TEX_FUV.pkl"
@@ -361,7 +362,7 @@ def save_textured_nimble(fname, skin_v, tex_img):
             f.writelines("v {:.5f} {:.5f} {:.5f}\n".format(v[0], v[1], v[2]))
         f.writelines(f_uv)
 
-    print("save to", fname)
+    console.log(f"[u grey]save obj to {fname} [/u grey]")
 
 
 
