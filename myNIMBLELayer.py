@@ -79,6 +79,9 @@ class MyNIMBLELayer(torch.nn.Module):
         self.skin_v_surface_mask = pm_dict['skin_v_surface_mask'].type(torch.bool)
         self.skin_v_node_weight = dis_to_weight(pm_dict['skin_v_gd'], 30, 50)
 
+        self.th_v_shaped_mean = None
+        self.tex_mean = None
+
         if nimble_mano_vreg is not None:
             self.register_buffer("nimble_mano_vreg_fidx", nimble_mano_vreg['lmk_faces_idx'])
             self.register_buffer("nimble_mano_vreg_bc", nimble_mano_vreg['lmk_bary_coords'])
@@ -132,9 +135,11 @@ class MyNIMBLELayer(torch.nn.Module):
         th_verts = th_verts[:, :, :3]
         return th_verts
 
-    def generate_hand_shape(self, betas, normalized=True):
+    def generate_hand_shape(self, betas, normalized=True, use_mean_shape=False):
         # beta : B, N
         batch_size, shape_ncomp = betas.shape
+        if use_mean_shape and self.th_v_shaped_mean is not None:
+            return self.th_v_shaped_mean.unsqueeze(0).repeat(batch_size, 1, 1), self.jreg_bone_joints_mean.unsqueeze(0).repeat(batch_size, 1, 1)
         assert self.shape_ncomp == shape_ncomp
 
         if normalized:
@@ -144,6 +149,7 @@ class MyNIMBLELayer(torch.nn.Module):
         th_v_shaped = (self.shape_basis[:shape_ncomp].T @ betas_real.T).view(-1, 3, batch_size).permute(2, 0, 1) + self.th_verts.unsqueeze(0).repeat(batch_size, 1, 1)
         
         jreg_bone_joints = torch.matmul(self.jreg_bone, th_v_shaped[:, :self.bone_v_sep])
+        self.th_v_shaped_mean, self.jreg_bone_joints_mean = th_v_shaped[0], jreg_bone_joints[0]
         return th_v_shaped, jreg_bone_joints
 
     def generate_full_pose(self, theta, normalized=True, with_root=True):
@@ -168,11 +174,11 @@ class MyNIMBLELayer(torch.nn.Module):
 
         return full_pose
 
-    def generate_texture(self, alpha, normalized=True):
-        if alpha is None:
-            return self.tex_mean.unsqueeze(0).repeat(batch_size, 1)
-            
+    def generate_texture(self, alpha, need=True, normalized=True):
         batch_size = alpha.shape[0]
+        if not need and self.tex_mean is not None:
+            return self.tex_mean.unsqueeze(0).repeat(batch_size, 1, 1, 1)
+            
         assert self.tex_ncomp == alpha.shape[1]
 
         if normalized:
@@ -191,6 +197,8 @@ class MyNIMBLELayer(torch.nn.Module):
 
         x = torch.cat([x_d, x_n, x_s], dim=-1)
         x = torch.clamp(x, min=0, max=1)
+
+        self.tex_mean = x[0]
         return x
 
     def mano_v2j_reg(self, mano_verts):#[b,778,3]
@@ -244,7 +252,8 @@ class MyNIMBLELayer(torch.nn.Module):
         else:
             full_pose = hand_params['pose_params'].view(-1, 20, 3) # b, 20, 3
 
-        th_v_shaped, jreg_joints = self.generate_hand_shape(hand_params['shape_params'],normalized=True)
+        # ** use mean shape
+        th_v_shaped, jreg_joints = self.generate_hand_shape(hand_params['shape_params'],normalized=True, use_mean_shape=True)
 
         # if scale_gt is not None:
         #     mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, hand_params['trans'], jreg_joints, self.sw, self.pbs, scale_gt)
@@ -261,7 +270,8 @@ class MyNIMBLELayer(torch.nn.Module):
         #     tex_img = self.generate_texture(hand_params['texture_params'])
         # else:
         #     tex_img = None
-        tex_img = self.generate_texture(hand_params['texture_params'])
+        # ** not generate texture
+        tex_img = self.generate_texture(hand_params['texture_params'], need=False)
 
         if handle_collision:
             skin_v = self.handle_collision(mesh_v)
