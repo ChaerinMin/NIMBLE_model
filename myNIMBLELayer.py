@@ -193,12 +193,13 @@ class MyNIMBLELayer(torch.nn.Module):
         x = torch.clamp(x, min=0, max=1)
         return x
 
-    def jnts_map_nimble2frei(self, mano_verts):#[b,778,3]
+    def mano_v2j_reg(self, mano_verts):#[b,778,3]
 
         batch_size = mano_verts.shape[0]
         MANO_file = 'data/MANO_RIGHT.pkl'
         dd = pickle.load(open(MANO_file, 'rb'),encoding='latin1')
         J_regressor = Variable(torch.from_numpy(np.expand_dims(dd['J_regressor'].todense(), 0).astype(np.float32)).to(device=mano_verts.device))
+        
         # J_reg: [1, 16, 778]
         # [b, 3, 778] x [b, 778, 16] -> [b, 3, 16]
         Jtr = torch.matmul(mano_verts.permute(0,2,1), J_regressor.repeat(batch_size,1,1).permute(0,2,1))
@@ -219,6 +220,17 @@ class MyNIMBLELayer(torch.nn.Module):
         
         # Jtr = torch.cat(Jtr, 2).permute(0,2,1)
 
+
+        return Jtr
+    
+    def nimble_v_2_mano_j_reg(self, nimble_verts):#[b,5990,3]
+
+        batch_size = nimble_verts.shape[0]
+        
+        # [b, 3, 5990] x [b, 5990, 21] -> [b, 3, 21]
+        # self.jreg_mano: [21, 5990]
+        Jtr = torch.matmul(self.jreg_mano.repeat(batch_size,1,1), nimble_verts)
+        # Jtr = Jtr.permute(0, 2, 1) # b, 21, 3
 
         return Jtr
 
@@ -260,7 +272,8 @@ class MyNIMBLELayer(torch.nn.Module):
         # skin_p3dmesh = smooth_mesh(skin_p3dmesh)
 
         skin_mano_v = self.nimble_to_mano(skin_v, is_surface=True)
-        joints = self.jnts_map_nimble2frei(skin_mano_v)
+        joints = self.mano_v2j_reg(skin_mano_v)
+        # joints = self.nimble_v_2_mano_j_reg(skin_v)
 
         # muscle_v = mesh_v[:,self.bone_v_sep:self.skin_v_sep,:]
         # bone_v = mesh_v[:,:self.bone_v_sep,:]
