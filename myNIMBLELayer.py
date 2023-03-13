@@ -239,8 +239,9 @@ class MyNIMBLELayer(torch.nn.Module):
         # else: # pass estimated scale
             # mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, hand_params['trans'], jreg_joints, self.sw, self.pbs, hand_params['scale'])
         # ** no global scale and trans
-        root_trans = torch.zeros(jreg_joints.shape[0], 3).to(jreg_joints.device)
-        mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, root_trans, jreg_joints, self.sw, self.pbs, None)
+        # root_trans = torch.zeros(jreg_joints.shape[0], 3).to(jreg_joints.device)
+        # mesh_v, bone_joints, rot, center_joint = self.forward_full(th_v_shaped, full_pose, root_trans, jreg_joints, self.sw, self.pbs, None)
+        mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, None, jreg_joints, self.sw, self.pbs, None)
         
         skin_v = mesh_v[:, self.skin_v_sep:, :]
 
