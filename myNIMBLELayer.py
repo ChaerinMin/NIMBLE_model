@@ -280,6 +280,7 @@ class MyNIMBLELayer(torch.nn.Module):
         faces = self.skin_f.repeat(skin_v.shape[0], 1, 1)
         skin_p3dmesh = Meshes(skin_v, faces)
         # skin_p3dmesh = smooth_mesh(skin_p3dmesh)
+        del faces
 
         skin_mano_v = self.nimble_to_mano(skin_v, is_surface=True)
         joints = self.mano_v2j_reg(skin_mano_v)
@@ -292,7 +293,7 @@ class MyNIMBLELayer(torch.nn.Module):
             'nimble_joints': bone_joints, # 25 joints
             'joints': joints, # Freihand joints, 21
             'verts': skin_v, # 5990 verts
-            'faces': faces, # very big number
+            'faces': None, # faces, # very big number
             'rot': rot, # b, 3
             'skin_meshes': skin_p3dmesh, # smoothed verts and faces
             'mano_verts': skin_mano_v, # 5990 -> 778 verts according to mano
