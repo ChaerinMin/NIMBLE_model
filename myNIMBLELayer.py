@@ -242,7 +242,7 @@ class MyNIMBLELayer(torch.nn.Module):
 
         return Jtr
 
-    def forward(self, hand_params, handle_collision=True, scale_gt=None):
+    def forward(self, hand_params, handle_collision=True):
         """
         Takes points in R^3 and first applies relevant pose and shape blend shapes.
         Then performs skinning.
