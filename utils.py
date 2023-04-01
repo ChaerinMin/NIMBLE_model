@@ -342,15 +342,17 @@ def save_textured_nimble(fname, skin_v, tex_img=None, console=None):
     
     # texture image
     tex_name_diffuse = fname.parent / (fname.stem + "_diffuse.png")
+    tex_name_normal = fname.parent / (fname.stem + "_normal.png")
+    tex_name_spec = fname.parent / (fname.stem + "_spec.png")
     tex_img = np.uint8(tex_img * 255)
     
     cv2.imwrite(str(tex_name_diffuse), tex_img[:,:, :3])
-    cv2.imwrite(str(fname.parent / (fname.stem + "_normal.png")), tex_img[:,:,3:6])
-    cv2.imwrite(str(fname.parent / (fname.stem + "_spec.png")), tex_img[:,:,6:])
+    cv2.imwrite(str(tex_name_normal), tex_img[:,:,3:6])
+    cv2.imwrite(str(tex_name_spec), tex_img[:,:,6:])
 
     # mtl
     mtl_str = "newmtl material_0\nKa 0.200000 0.200000 0.200000\nKd 0.800000 0.800000 0.800000\nKs 1.000000 1.000000 1.000000\nTr 1.000000\nillum 2\nNs 0.000000\nmap_Kd "
-    mtl_str = mtl_str + tex_name_diffuse.name
+    mtl_str = mtl_str + tex_name_diffuse.name + "\nmap_Ks " + tex_name_spec + "\nmap_bump " + tex_name_normal
     with open(mtl_name, "w") as f:
        f.writelines(mtl_str)
 
