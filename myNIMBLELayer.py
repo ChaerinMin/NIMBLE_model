@@ -17,10 +17,11 @@ class MyNIMBLELayer(torch.nn.Module):
     __constants__ = [
         'use_pose_pca', 'shape_ncomp', 'pose_ncomp', 'pm_dict'
     ]
-    def __init__(self, ifRender, device, shape_ncomp=20, pose_ncomp=30, tex_ncomp=10, pm_dict_name="utils/NIMBLE_model/assets/NIMBLE_DICT_9137.pkl", tex_dict_name="utils/NIMBLE_model/assets/NIMBLE_TEX_DICT.pkl", nimble_mano_vreg_name="utils/NIMBLE_model/assets/NIMBLE_MANO_VREG.pkl", use_pose_pca=True):
+    def __init__(self, ifRender, device, use_mean_shape=False, shape_ncomp=20, pose_ncomp=30, tex_ncomp=10, pm_dict_name="utils/NIMBLE_model/assets/NIMBLE_DICT_9137.pkl", tex_dict_name="utils/NIMBLE_model/assets/NIMBLE_TEX_DICT.pkl", nimble_mano_vreg_name="utils/NIMBLE_model/assets/NIMBLE_MANO_VREG.pkl", use_pose_pca=True):
         super(MyNIMBLELayer, self).__init__()
         self.device = device
         self.ifRender = ifRender
+        self.use_mean_shape = use_mean_shape
 
         if os.path.exists(pm_dict_name):
             pm_dict = np.load(pm_dict_name, allow_pickle=True)
@@ -195,7 +196,7 @@ class MyNIMBLELayer(torch.nn.Module):
         x_s = (self.tex_spec_basis[:, :self.tex_ncomp] @ alpha_real_s.T).T + self.tex_spec_mean.unsqueeze(0).repeat(batch_size, 1)
         x_s = x_s.reshape(batch_size, self.tex_size, self.tex_size, 3)
 
-        x = torch.cat([x_d, x_n, x_s], dim=-1)
+        x = torch.cat([x_d, x_n, x_s], dim=-1) # diffuse, normal, and spec
         x = torch.clamp(x, min=0, max=1)
 
         self.tex_mean = x[0]
@@ -227,8 +228,6 @@ class MyNIMBLELayer(torch.nn.Module):
         Jtr = torch.cat([Jtr[:,:20], mano_verts[:,744].unsqueeze(1), Jtr[:,20:]], 1)
         
         # Jtr = torch.cat(Jtr, 2).permute(0,2,1)
-
-
         return Jtr
     
     def nimble_v_2_mano_j_reg(self, nimble_verts):#[b,5990,3]
@@ -252,8 +251,7 @@ class MyNIMBLELayer(torch.nn.Module):
         else:
             full_pose = hand_params['pose_params'].view(-1, 20, 3) # b, 20, 3
 
-        # ** use mean shape
-        th_v_shaped, jreg_joints = self.generate_hand_shape(hand_params['shape_params'],normalized=True, use_mean_shape=True)
+        th_v_shaped, jreg_joints = self.generate_hand_shape(hand_params['shape_params'],normalized=True, use_mean_shape=self.use_mean_shape)
 
         # if scale_gt is not None:
         #     mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, hand_params['trans'], jreg_joints, self.sw, self.pbs, scale_gt)
@@ -262,24 +260,24 @@ class MyNIMBLELayer(torch.nn.Module):
         # ** no global scale and trans
         # root_trans = torch.zeros(jreg_joints.shape[0], 3).to(jreg_joints.device)
         # mesh_v, bone_joints, rot, center_joint = self.forward_full(th_v_shaped, full_pose, root_trans, jreg_joints, self.sw, self.pbs, None)
-        mesh_v, bone_joints, rot = self.forward_full(th_v_shaped, full_pose, None, jreg_joints, self.sw, self.pbs, None)
+        mesh_v, bone_joints, rot = self.forward_full(points=th_v_shaped,      pose=full_pose,   root_trans=None, joints=jreg_joints, 
+                                                     skinning_weight=self.sw, pose_bs=self.pbs, global_scale=None)
         
         skin_v = mesh_v[:, self.skin_v_sep:, :]
 
-        # if self.ifRender:
-        #     tex_img = self.generate_texture(hand_params['texture_params'])
-        # else:
-        #     tex_img = None
-        # ** not generate texture
-        tex_img = self.generate_texture(hand_params['texture_params'], need=False)
+        if self.ifRender:
+            tex_img = self.generate_texture(hand_params['texture_params'])
+        else:
+            # not generate texture
+            tex_img = self.generate_texture(hand_params['texture_params'], need=False)
 
-        if handle_collision:
+        if handle_collision: # this is time-consuming
             skin_v = self.handle_collision(mesh_v)
             mesh_v[:, self.skin_v_sep:, :] = skin_v
 
         faces = self.skin_f.repeat(skin_v.shape[0], 1, 1)
         skin_p3dmesh = Meshes(skin_v, faces)
-        # skin_p3dmesh = smooth_mesh(skin_p3dmesh)
+        # skin_p3dmesh = smooth_mesh(skin_p3dmesh) # this is time-consuming
         del faces
 
         skin_mano_v = self.nimble_to_mano(skin_v, is_surface=True)
@@ -295,7 +293,7 @@ class MyNIMBLELayer(torch.nn.Module):
             'verts': skin_v, # 5990 verts
             'faces': None, # faces, # very big number
             'rot': rot, # b, 3
-            'skin_meshes': skin_p3dmesh, # smoothed verts and faces
+            'skin_meshes': skin_p3dmesh, # meshes
             'mano_verts': skin_mano_v, # 5990 -> 778 verts according to mano
             'textures': tex_img,
         }
