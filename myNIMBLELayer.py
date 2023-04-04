@@ -267,16 +267,24 @@ class MyNIMBLELayer(torch.nn.Module):
 
         if self.ifRender:
             tex_img = self.generate_texture(hand_params['texture_params'])
+            # create the texture object
+            texture = pytorch3d.structures.Texture(
+                maps=tex_img.permute(0, 3, 1, 2),  # Bx(3+3+3)xHxW
+                mipmaps=None,  # no mipmaps
+                align_corners=False,  # no corner alignment
+                normalize=False,  # already normalized in `generate_texture`
+            )
         else:
             # not generate texture
             tex_img = self.generate_texture(hand_params['texture_params'], need=False)
+            texture = None
 
         if handle_collision: # this is time-consuming
             skin_v = self.handle_collision(mesh_v)
             mesh_v[:, self.skin_v_sep:, :] = skin_v
 
         faces = self.skin_f.repeat(skin_v.shape[0], 1, 1)
-        skin_p3dmesh = Meshes(skin_v, faces)
+        skin_p3dmesh = Meshes(skin_v, faces, texture)
         # skin_p3dmesh = smooth_mesh(skin_p3dmesh) # this is time-consuming
         del faces
 
