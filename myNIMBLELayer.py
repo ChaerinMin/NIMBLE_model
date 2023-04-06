@@ -38,7 +38,7 @@ class MyNIMBLELayer(torch.nn.Module):
         else:
             nimble_mano_vreg=None
         
-        uvs_name = 'utils/NIMBLE_model/assets/faces_uv.pt'
+        uvs_name = 'utils/NIMBLE_model/assets/faces_uvs.pt'
         if os.path.exists(uvs_name):
             self.register_buffer("faces_uv", torch.load(uvs_name))
             self.register_buffer("verts_uv", torch.load(uvs_name.replace('faces', 'verts')))
@@ -252,6 +252,7 @@ class MyNIMBLELayer(torch.nn.Module):
         Takes points in R^3 and first applies relevant pose and shape blend shapes.
         Then performs skinning.
         """
+        batch_size = hand_params['pose_params'].shape[0]
         if self.use_pose_pca:
             full_pose = self.generate_full_pose(hand_params['pose_params'], normalized=True, with_root=True).view(-1, 20, 3)
         else:
@@ -279,7 +280,8 @@ class MyNIMBLELayer(torch.nn.Module):
             # )
             texture = Textures(
                 maps=tex_img.permute(0, 3, 1, 2),  # Bx(3+3+3)xHxW
-                verts_uvs=self.verts_uvs, faces_uvs=self.faces_uvs, 
+                verts_uvs=self.verts_uv.repeat(batch_size, 1, 1), 
+                faces_uvs=self.faces_uv.repeat(batch_size, 1, 1), 
             )
         else:
             # not generate texture
