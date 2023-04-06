@@ -205,7 +205,7 @@ class MyNIMBLELayer(torch.nn.Module):
         x = torch.cat([x_d, x_n, x_s], dim=-1) # diffuse, normal, and spec
         x = torch.clamp(x, min=0, max=1)
 
-        self.tex_mean = x[0]
+        self.tex_mean = x[0] # [:,:,:, :3]
         return x
 
     def mano_v2j_reg(self, mano_verts):#[b,778,3]
@@ -273,13 +273,15 @@ class MyNIMBLELayer(torch.nn.Module):
         skin_v = mesh_v[:, self.skin_v_sep:, :]
 
         if self.ifRender:
-            tex_img = self.generate_texture(hand_params['texture_params'])
+            # !need is set to False to use mean texture
+            tex_img = self.generate_texture(hand_params['texture_params'], need=False)
+            # tex_img = self.generate_texture(hand_params['texture_params'])
             # create the texture object
             # texture = TexturesUV(
             #     maps=tex_img.permute(0, 3, 1, 2),  # Bx(3+3+3)xHxW
             # )
             texture = Textures(
-                maps=tex_img.permute(0, 3, 1, 2),  # Bx(3+3+3)xHxW
+                maps=tex_img[:,:,:, :3], # .permute(0, 3, 1, 2),  # Bx3xHxW
                 verts_uvs=self.verts_uv.repeat(batch_size, 1, 1), 
                 faces_uvs=self.faces_uv.repeat(batch_size, 1, 1), 
             )
