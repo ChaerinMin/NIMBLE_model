@@ -10,6 +10,7 @@ import trimesh
 from utils.NIMBLE_model.utils import batch_to_tensor_device, smooth_mesh
 from utils.NIMBLE_model.utils import *
 from pytorch3d.structures.meshes import Meshes
+from pytorch3d.renderer import Textures
 from torch.autograd import Variable
 import pickle
 
@@ -36,6 +37,11 @@ class MyNIMBLELayer(torch.nn.Module):
             nimble_mano_vreg = batch_to_tensor_device(nimble_mano_vreg, self.device)
         else:
             nimble_mano_vreg=None
+        
+        uvs_name = 'utils/NIMBLE_model/assets/faces_uv.pt'
+        if os.path.exists(uvs_name):
+            self.register_buffer("faces_uv", torch.load(uvs_name))
+            self.register_buffer("verts_uv", torch.load(uvs_name.replace('faces', 'verts')))
 
         identity_rot = torch.eye(3).to(self.device)
         self.register_buffer("identity_rot", identity_rot)
@@ -268,11 +274,12 @@ class MyNIMBLELayer(torch.nn.Module):
         if self.ifRender:
             tex_img = self.generate_texture(hand_params['texture_params'])
             # create the texture object
-            texture = pytorch3d.structures.Texture(
+            # texture = TexturesUV(
+            #     maps=tex_img.permute(0, 3, 1, 2),  # Bx(3+3+3)xHxW
+            # )
+            texture = Textures(
                 maps=tex_img.permute(0, 3, 1, 2),  # Bx(3+3+3)xHxW
-                mipmaps=None,  # no mipmaps
-                align_corners=False,  # no corner alignment
-                normalize=False,  # already normalized in `generate_texture`
+                verts_uvs=self.verts_uvs, faces_uvs=self.faces_uvs, 
             )
         else:
             # not generate texture
