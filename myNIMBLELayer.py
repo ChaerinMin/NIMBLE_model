@@ -280,8 +280,9 @@ class MyNIMBLELayer(torch.nn.Module):
             # texture = TexturesUV(
             #     maps=tex_img.permute(0, 3, 1, 2),  # Bx(3+3+3)xHxW
             # )
+            tex_img_rgb = tex_img[:,:,:, :3].flip(dims=(3,))
             texture = Textures(
-                maps=tex_img[:,:,:, :3], # .permute(0, 3, 1, 2),  # Bx3xHxW
+                maps=tex_img_rgb,  # BxHxWxC(3)
                 verts_uvs=self.verts_uv.repeat(batch_size, 1, 1), 
                 faces_uvs=self.faces_uv.repeat(batch_size, 1, 1), 
             )
