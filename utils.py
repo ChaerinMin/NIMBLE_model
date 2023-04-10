@@ -353,7 +353,7 @@ def save_textured_nimble(fname, skin_v, tex_img=None, console=None):
 
         # mtl
         mtl_str = "newmtl material_0\nKa 0.200000 0.200000 0.200000\nKd 0.800000 0.800000 0.800000\nKs 1.000000 1.000000 1.000000\nTr 1.000000\nillum 2\nNs 0.000000\nmap_Kd "
-        mtl_str = mtl_str + tex_name_diffuse.name + "\nmap_Ks " + tex_name_spec + "\nmap_bump " + tex_name_normal
+        mtl_str = mtl_str + tex_name_diffuse.name + "\nmap_Ks " + tex_name_spec.name + "\nmap_bump " + tex_name_normal.name
         with open(mtl_name, "w") as f:
             f.writelines(mtl_str)
 
@@ -365,7 +365,10 @@ def save_textured_nimble(fname, skin_v, tex_img=None, console=None):
             f.writelines("v {:.5f} {:.5f} {:.5f}\n".format(v[0], v[1], v[2]))
         f.writelines(f_uv)
 
-    console.log(f"[u grey]save obj to {fname} [/u grey]")
+    if console is not None:
+        console.log(f"[u grey]save obj to {fname} [/u grey]")
+    else:
+        print(f"save obj to {fname} ")
 
 
 

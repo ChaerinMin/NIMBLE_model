@@ -11,8 +11,8 @@ from pytorch3d.structures.meshes import Meshes
 if __name__ == "__main__":
     device = torch.zeros(1).device
 
-    pm_dict_name = r"assets/NIMBLE_DICT_9137.pkl"
-    tex_dict_name = r"assets/NIMBLE_TEX_DICT.pkl"
+    pm_dict_name = r"utils/NIMBLE_model/assets/NIMBLE_DICT_9137.pkl"
+    tex_dict_name = r"utils/NIMBLE_model/assets/NIMBLE_TEX_DICT.pkl"
 
     if os.path.exists(pm_dict_name):
         pm_dict = np.load(pm_dict_name, allow_pickle=True)
@@ -22,15 +22,15 @@ if __name__ == "__main__":
         tex_dict = np.load(tex_dict_name, allow_pickle=True)
         tex_dict = batch_to_tensor_device(tex_dict, device)
 
-    if os.path.exists(r"assets/NIMBLE_MANO_VREG.pkl"):
-        nimble_mano_vreg = np.load("assets/NIMBLE_MANO_VREG.pkl", allow_pickle=True)
+    if os.path.exists(r"utils/NIMBLE_model/assets/NIMBLE_MANO_VREG.pkl"):
+        nimble_mano_vreg = np.load("utils/NIMBLE_model/assets/NIMBLE_MANO_VREG.pkl", allow_pickle=True)
         nimble_mano_vreg = batch_to_tensor_device(nimble_mano_vreg, device)
     else:
         nimble_mano_vreg=None
 
     nlayer = NIMBLELayer(pm_dict, tex_dict, device, use_pose_pca=True, pose_ncomp=30, shape_ncomp=20, nimble_mano_vreg=nimble_mano_vreg)
     
-    bn = 1
+    bn = 5
     pose_param = torch.rand(bn, 30) * 2 - 1 
     shape_param = torch.rand(bn, 20) * 2 - 1 
     tex_param = torch.rand(bn, 10) - 0.5
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     skin_v_smooth = skin_p3dmesh.verts_padded().detach().cpu().numpy()
     bone_joints = bone_joints.detach().cpu().numpy()
     
-    output_folder = "output"
+    output_folder = "utils/NIMBLE_model/output"
     os.makedirs(output_folder, exist_ok=True)
     for i in range(bn):
         # joints
