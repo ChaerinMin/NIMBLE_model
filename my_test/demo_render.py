@@ -14,7 +14,8 @@ from pytorch3d.renderer import (
     MeshRasterizer,
     FoVPerspectiveCameras,
     PerspectiveCameras,
-    Materials
+    Materials,
+    HardPhongShader
 )
 from pytorch3d.renderer.lighting import PointLights
 import torchvision.transforms as transforms
@@ -76,25 +77,28 @@ def get_224_renderer():
 def get_best_renderer():
     sigma = 1e-4
     raster_settings_soft = RasterizationSettings(
-        image_size=224, 
+        image_size=1024, 
         blur_radius=0.0, 
-        faces_per_pixel=1, 
+        faces_per_pixel=50, 
+        z_clip_value=None
     )
     # create a renderer object
 
     # Create a Materials object with the specified material properties
-    # materials = Materials(
-    #     ambient_color=((0.2, 0.2, 0.2),),
-    #     diffuse_color=((0.8, 0.8, 0.8),),
-    #     specular_color=((1, 1, 1),),
-    # )
+    materials = Materials(
+        ambient_color=((0.9, 0.9, 0.9),),
+        diffuse_color=((0.8, 0.8, 0.8),),
+        specular_color=((0.2, 0.2, 0.2),),
+        shininess=60,
+        device=device,
+    )
 
     renderer_p3d = MeshRenderer(
         rasterizer=MeshRasterizer(
             raster_settings=raster_settings_soft
         ),
-        shader=SoftPhongShader(
-            # materials=materials,
+        shader=HardPhongShader(
+            materials=materials,
             device=device
         ),
     )
@@ -127,19 +131,21 @@ def render(root, filename, renderer):
     # normal_tensor = transforms.ToTensor()(normal_img).permute(2, 0, 1).unsqueeze(0)
 
     # R, T = look_at_view_transform(dist=100, elev=50, azim=-15) 
-    R, T = look_at_view_transform(dist=150) 
+    R, T = look_at_view_transform(dist=100) 
+    # cameras = PerspectiveCameras(R=R, T=T, in_ndc=False, image_size=((224,224),), device=device)
     cameras = PerspectiveCameras(R=R, T=T, device=device)
+    verts_location_mean = tuple(verts.mean(dim=0).tolist())
 
     lighting = PointLights(
                 # ambient_color=((0.2, 0.2, 0.2),),
                 # diffuse_color=((0.8, 0.8, 0.8),),
                 # specular_color=((1, 1, 1),),
-                # location=((0.0, 0.0, 0.0),),
+                location=(verts_location_mean,),
                 device=device,
             )
 
     # Render the 3D model with the texture atlas applied
-    images = renderer(mesh, cameras=cameras, lighting=lighting)
+    images = renderer(mesh, cameras=cameras, lighting=lighting, znear=-2, zfar=1000.0)
     return images
 
 def pyplot_save_img(img: torch.Tensor, save_path):
