@@ -20,12 +20,15 @@ from pytorch3d.renderer import (
 from pytorch3d.renderer.lighting import PointLights
 import torchvision.transforms as transforms
 from PIL import Image
+import torch.nn.functional as F
 # Setup
 if torch.cuda.is_available():
     device = torch.device("cuda:0")
     torch.cuda.set_device(device)
 else:
     device = torch.device("cpu")
+
+aa_factor = 3
 
 def get_uv_map():
     uvs_name = 'utils/NIMBLE_model/assets/faces_uvs.pt'
@@ -36,38 +39,39 @@ def get_uv_map():
 def get_224_renderer():
     sigma = 1e-4
     raster_settings_soft = RasterizationSettings(
-        image_size=224, 
+        image_size=224 * aa_factor, 
         blur_radius=0.0, 
         faces_per_pixel=1, 
-        # perspective_correct=False, 
     )
     # create a renderer object
-    R, T = look_at_view_transform(dist=70, elev=50, azim=-15) 
-    cameras = FoVPerspectiveCameras(R=R, T=T, device=device)
+    # R, T = look_at_view_transform(dist=70, elev=50, azim=-15) 
+    # cameras = FoVPerspectiveCameras(R=R, T=T, device=device)
 
     # Create a Materials object with the specified material properties
-    # materials = Materials(
-    #     ambient_color=((0.2, 0.2, 0.2),),
-    #     diffuse_color=((0.8, 0.8, 0.8),),
-    #     specular_color=((1, 1, 1),),
-    # )
-    lighting = PointLights(
-                # ambient_color=((0.2, 0.2, 0.2),),
-                # diffuse_color=((0.8, 0.8, 0.8),),
-                # specular_color=((1, 1, 1),),
-                # location=((0.0, 0.0, 0.0),),
-                device=device,
-            )
+    materials = Materials(
+        # ambient_color=((0.9, 0.9, 0.9),),
+        diffuse_color=((0.8, 0.8, 0.8),),
+        specular_color=((0.2, 0.2, 0.2),),
+        shininess=30,
+        device=device,
+    )
+    # lighting = PointLights(
+    #             # ambient_color=((0.2, 0.2, 0.2),),
+    #             # diffuse_color=((0.8, 0.8, 0.8),),
+    #             # specular_color=((1, 1, 1),),
+    #             # location=((0.0, 0.0, 0.0),),
+    #             device=device,
+    #         )
 
     renderer_p3d = MeshRenderer(
         rasterizer=MeshRasterizer(
-            cameras=cameras,
+            # cameras=cameras,
             raster_settings=raster_settings_soft
         ),
-        shader=SoftPhongShader(
-            cameras=cameras,
-            # materials=materials,
-            lights=lighting,
+        shader=HardPhongShader(
+            # cameras=cameras,
+            materials=materials,
+            # lights=lighting,
             device=device
         ),
     )
@@ -97,14 +101,15 @@ def get_best_renderer():
         rasterizer=MeshRasterizer(
             raster_settings=raster_settings_soft
         ),
-        shader=HardPhongShader(
+        # shader=HardPhongShader(
+        shader=SoftPhongShader(
             materials=materials,
             device=device
         ),
     )
     return renderer_p3d
 
-def render(root, filename, renderer):
+def render(root, filename, renderer: MeshRenderer):
     # Load the 3D model
     verts, faces, aux = load_obj(os.path.join(root, filename),
                                 create_texture_atlas=True, device=device)
@@ -145,7 +150,11 @@ def render(root, filename, renderer):
             )
 
     # Render the 3D model with the texture atlas applied
+    # images = renderer(mesh, cameras=cameras, lighting=lighting)
     images = renderer(mesh, cameras=cameras, lighting=lighting, znear=-2, zfar=1000.0)
+    images = images.permute(0, 3, 1, 2)  # NHWC -> NCHW
+    images = F.avg_pool2d(images, kernel_size=aa_factor, stride=aa_factor)
+    images = images.permute(0, 2, 3, 1)  # NCHW -> NHWC
     return images
 
 def pyplot_save_img(img: torch.Tensor, save_path):
@@ -160,6 +169,7 @@ def pyplot_save_img(img: torch.Tensor, save_path):
 if __name__ == '__main__':
     root = '/home/jiayin/HandRecon/utils/NIMBLE_model/output/'
     renderer = get_best_renderer()
+    # renderer = get_224_renderer()
     file_list = os.listdir(root)
     obj_files = [file for file in file_list if file.endswith('skin.obj')]
     for file in obj_files:
