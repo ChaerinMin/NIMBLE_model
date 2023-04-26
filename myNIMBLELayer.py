@@ -273,9 +273,8 @@ class MyNIMBLELayer(torch.nn.Module):
         skin_v = mesh_v[:, self.skin_v_sep:, :]
 
         if self.ifRender:
-            # !need is set to False to use mean texture
-            tex_img = self.generate_texture(hand_params['texture_params'], need=False)
-            # tex_img = self.generate_texture(hand_params['texture_params'])
+            # tex_img = self.generate_texture(hand_params['texture_params'], need=False)
+            tex_img = self.generate_texture(hand_params['texture_params'])
             # create the texture object
             # texture = TexturesUV(
             #     maps=tex_img.permute(0, 3, 1, 2),  # Bx(3+3+3)xHxW
