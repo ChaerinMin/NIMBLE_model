@@ -364,6 +364,12 @@ def save_textured_nimble(fname, skin_v, tex_img=None, console=None):
         
             cv2.imwrite(str(tex_name_diffuse), tex_img[:,:, :3])
 
+            # mtl
+            mtl_str = "newmtl material_0\nKa 0.200000 0.200000 0.200000\nKd 0.800000 0.800000 0.800000\nKs 1.000000 1.000000 1.000000\nTr 1.000000\nillum 2\nNs 0.000000\nmap_Kd "
+            mtl_str = mtl_str + tex_name_diffuse.name 
+            with open(mtl_name, "w") as f:
+                f.writelines(mtl_str)
+
 
     # obj
     f_uv = np.load(textured_pkl, allow_pickle=True)
