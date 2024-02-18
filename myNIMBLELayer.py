@@ -211,7 +211,7 @@ class MyNIMBLELayer(torch.nn.Module):
     def mano_v2j_reg(self, mano_verts):#[b,778,3]
 
         batch_size = mano_verts.shape[0]
-        MANO_file = 'data/MANO_RIGHT.pkl'
+        MANO_file = 'aseets/mano/MANO_RIGHT.pkl'
         dd = pickle.load(open(MANO_file, 'rb'),encoding='latin1')
         J_regressor = Variable(torch.from_numpy(np.expand_dims(dd['J_regressor'].todense(), 0).astype(np.float32)).to(device=mano_verts.device))
         
